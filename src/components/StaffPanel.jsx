@@ -132,8 +132,9 @@ export default function StaffPanel() {
     setRedeemMsg("Reward redeemed — tokens reset to 0.");
     setResult((prev) => (prev ? { ...prev, tokens: 0 } : prev));
   }
-
-  const claimUrl = qrCode ? `${window.location.origin}/?claim=${qrCode}` : null;
+const claimUrl = qrCode && qrExpiresAt
+  ? `${window.location.origin}/?claim=${qrCode}&exp=${qrExpiresAt}`
+  : null;
 
   return (
     <div className="min-h-screen bg-ink flex items-center justify-center px-5 py-12">

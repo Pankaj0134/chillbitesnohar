@@ -97,10 +97,10 @@ declare
   new_last_claim_at timestamptz;
   code_row record;
 begin
-  select * into code_row
-  from public.claim_codes cc
-  where cc.code = input_code
-  for update;
+select * into code_row
+from public.claim_codes cc
+where cc.code = trim(input_code)
+for update;
 
   if code_row is null then
     raise exception 'Invalid code. Ask staff for a fresh QR code.';
