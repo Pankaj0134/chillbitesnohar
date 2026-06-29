@@ -28,16 +28,23 @@ export function useLoyalty() {
   const canClaim = tokens < TOKENS_NEEDED && hoursUntilNextClaim === 0;
 
 const claimToken = useCallback(async (code) => {
-    console.log("[DEBUG] claimToken called with code:", JSON.stringify(code), "length:", code?.length);
-    const { error } = await supabase.rpc("claim_token", { input_code: code });
-    if (error) {
-      console.log("[DEBUG] claim_token RPC error:", error.message);
-      return { success: false, message: error.message };
-    }
-    await refreshAccount();
-    return { success: true, message: null };
-  }, [refreshAccount]);
+  console.log("Code received:", code);
+  console.log("Type:", typeof code);
 
+  const { data, error } = await supabase.rpc("claim_token", {
+    input_code: String(code).trim(),
+  });
+
+  console.log("RPC Data:", data);
+  console.log("RPC Error:", error);
+
+  if (error) {
+    return { success: false, message: error.message };
+  }
+
+  await refreshAccount();
+  return { success: true, message: null };
+}, [refreshAccount]);
   const markRedeemed = useCallback(async () => {
     // Customers don't redeem themselves — staff do, via the /staff panel
     // and staff_redeem(). This is kept only so LoyaltyCard's "Redeem Now"
