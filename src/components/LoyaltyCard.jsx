@@ -173,10 +173,14 @@ async function handleClaim() {
                     </p>
                   </div>
                 )}
-
-                {claimError && (
+{claimError && (
                   <p className="text-red-500 text-sm text-center mt-3">{claimError}</p>
                 )}
+
+                {/* TEMPORARY DEBUG — remove after fixing the invalid-code issue */}
+                <p className="text-center text-xs text-purple-600 font-mono mt-3 bg-purple-50 py-2 rounded">
+                  DEBUG: claimCode = "{claimCode === null ? "null" : claimCode}"
+                </p>
               </motion.div>
             ) : (
               <motion.div
