@@ -27,9 +27,11 @@ export function useLoyalty() {
 
   const canClaim = tokens < TOKENS_NEEDED && hoursUntilNextClaim === 0;
 
-  const claimToken = useCallback(async (code) => {
+const claimToken = useCallback(async (code) => {
+    console.log("[DEBUG] claimToken called with code:", JSON.stringify(code), "length:", code?.length);
     const { error } = await supabase.rpc("claim_token", { input_code: code });
     if (error) {
+      console.log("[DEBUG] claim_token RPC error:", error.message);
       return { success: false, message: error.message };
     }
     await refreshAccount();
