@@ -34,15 +34,21 @@ export function AuthProvider({ children }) {
     return data;
   }, []);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        const acc = await loadAccount(session.user.id);
-        setAccount(acc);
-      }
-      setLoading(false);
-    });
+useEffect(() => {
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        setSession(session);
+        if (session?.user) {
+          const acc = await loadAccount(session.user.id);
+          setAccount(acc);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch initial session:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
@@ -56,6 +62,7 @@ export function AuthProvider({ children }) {
 
     return () => listener.subscription.unsubscribe();
   }, [loadAccount]);
+
 
   /**
    * New customer: create an account with phone + password. No SMS, no
