@@ -30,8 +30,8 @@ alter table public.daily_claim_codes enable row level security;
 --    each time, since today's code should stay valid all day once
 --    customers have started scanning it.
 -- ---------------------------------------------------------------
-create or replace function public.generate_daily_code(input_pin text)
-returns table (code text, claim_date date)
+create or replace function public.claim_token(input_code text)
+returns table (tokens int, last_claim_at timestamptz)
 language plpgsql
 security definer
 set search_path = public, extensions

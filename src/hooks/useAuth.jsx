@@ -63,7 +63,6 @@ useEffect(() => {
     return () => listener.subscription.unsubscribe();
   }, [loadAccount]);
 
-
   /**
    * New customer: create an account with phone + password. No SMS, no
    * OTP, no verification that the phone number is real — by design, per
