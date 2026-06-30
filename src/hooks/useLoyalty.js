@@ -3,48 +3,46 @@ import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "./useAuth";
 
 const TOKENS_NEEDED = 4;
-const CLAIM_COOLDOWN_HOURS = 12;
 
 /**
- * Loyalty state now comes from the signed-in customer's row in Supabase
- * (`loyalty_accounts`), not localStorage. The actual claim logic — the
- * cooldown and the 4-token cap — is enforced inside the `claim_token()`
- * Postgres function (see supabase/claim_token_function.sql), not here.
+ * Loyalty state comes from the signed-in customer's row in Supabase
+ * (`loyalty_accounts`). The actual claim logic — the calendar-day limit
+ * and the 4-token cap — is enforced inside the `claim_token(code)`
+ * Postgres function (see supabase/daily_qr_migration.sql), not here.
  * This hook just calls that function and reflects whatever it returns;
  * it does not independently decide whether a claim is allowed.
+ *
+ * NOTE: "once per day" here means once per CALENDAR DATE (UTC), not a
+ * rolling 24-hour window — claiming at 11pm and again at 1am the next
+ * day is allowed, since those are different calendar dates.
  */
 export function useLoyalty() {
   const { account, refreshAccount } = useAuth();
 
   const tokens = account?.tokens ?? 0;
-  const lastClaimAt = account?.last_claim_at ? new Date(account.last_claim_at).getTime() : null;
+  const lastClaimAt = account?.last_claim_at ? new Date(account.last_claim_at) : null;
 
-  const hoursUntilNextClaim = useMemo(() => {
-    if (!lastClaimAt) return 0;
-    const hoursSince = (Date.now() - lastClaimAt) / (1000 * 60 * 60);
-    return Math.max(0, Math.ceil(CLAIM_COOLDOWN_HOURS - hoursSince));
+  const alreadyClaimedToday = useMemo(() => {
+    if (!lastClaimAt) return false;
+    const today = new Date();
+    return (
+      lastClaimAt.getUTCFullYear() === today.getUTCFullYear() &&
+      lastClaimAt.getUTCMonth() === today.getUTCMonth() &&
+      lastClaimAt.getUTCDate() === today.getUTCDate()
+    );
   }, [lastClaimAt]);
 
-  const canClaim = tokens < TOKENS_NEEDED && hoursUntilNextClaim === 0;
+  const canClaim = tokens < TOKENS_NEEDED && !alreadyClaimedToday;
 
-const claimToken = useCallback(async (code) => {
-  console.log("Code received:", code);
-  console.log("Type:", typeof code);
+  const claimToken = useCallback(async (code) => {
+    const { error } = await supabase.rpc("claim_token", { input_code: code });
+    if (error) {
+      return { success: false, message: error.message };
+    }
+    await refreshAccount();
+    return { success: true, message: null };
+  }, [refreshAccount]);
 
-  const { data, error } = await supabase.rpc("claim_token", {
-    input_code: String(code).trim(),
-  });
-
-  console.log("RPC Data:", data);
-  console.log("RPC Error:", error);
-
-  if (error) {
-    return { success: false, message: error.message };
-  }
-
-  await refreshAccount();
-  return { success: true, message: null };
-}, [refreshAccount]);
   const markRedeemed = useCallback(async () => {
     // Customers don't redeem themselves — staff do, via the /staff panel
     // and staff_redeem(). This is kept only so LoyaltyCard's "Redeem Now"
@@ -57,7 +55,7 @@ const claimToken = useCallback(async (code) => {
     tokensNeeded: TOKENS_NEEDED,
     isComplete: tokens >= TOKENS_NEEDED,
     canClaim,
-    hoursUntilNextClaim,
+    alreadyClaimedToday,
     claimToken,
     markRedeemed,
   };

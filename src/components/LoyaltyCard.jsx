@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import confetti from "canvas-confetti";
 import { useLoyalty } from "../hooks/useLoyalty";
 import { useAuth } from "../hooks/useAuth";
@@ -22,31 +22,23 @@ export default function LoyaltyCard() {
   const [copied, setCopied] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [justUnlocked, setJustUnlocked] = useState(loyalty.isComplete);
-
-  // claimCode: the code itself, read once from the URL.
-  // claimExpiresAt: the timestamp (ms) the staff panel generated alongside
-  // it, also read from the URL — lets us detect expiry locally, instantly,
-  // without waiting on a server round-trip for the "expired" message.
   const [claimCode, setClaimCode] = useState(null);
-  const [claimExpiresAt, setClaimExpiresAt] = useState(null);
   const [claimError, setClaimError] = useState("");
-  const [isExpired, setIsExpired] = useState(false);
 
-  // The counter QR points at e.g. chillbitesnohar.com/?claim=482917&exp=1735... —
-  // pick both up from the URL once on load.
+  // The counter QR points at e.g. chillbitesnohar.com/?claim=482917 — pick
+  // that code up from the URL once on load. Unlike the old system, this
+  // code has no expiry timer on the client: it's valid for the whole
+  // calendar day, and the server is the source of truth for that.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("claim")?.trim();
-    const exp = params.get("exp");
-
     if (code) {
       setClaimCode(code);
-      setClaimExpiresAt(exp ? Number(exp) : null);
-
-      // Clean both params out of the visible URL so they can't be
-      // trivially copied from the address bar and reused later.
+      // Clean the code out of the visible URL so it can't be trivially
+      // copied from the address bar and reused later from outside the
+      // cafe — claiming still always requires having scanned today's
+      // physical QR in the first place.
       params.delete("claim");
-      params.delete("exp");
       const newSearch = params.toString();
       window.history.replaceState(
         {},
@@ -56,25 +48,8 @@ export default function LoyaltyCard() {
     }
   }, []);
 
-  // Tick every second while a code is pending, so "expired" shows up the
-  // moment the 5-minute window passes — even if the customer is still
-  // sitting on the sign-up form when it happens.
-  const tickRef = useRef(null);
-  useEffect(() => {
-    if (!claimCode || !claimExpiresAt) {
-      setIsExpired(false);
-      return;
-    }
-    function check() {
-      setIsExpired(Date.now() > claimExpiresAt);
-    }
-    check();
-    tickRef.current = setInterval(check, 1000);
-    return () => clearInterval(tickRef.current);
-  }, [claimCode, claimExpiresAt]);
-
   async function handleClaim() {
-    if (!claimCode || isExpired) return;
+    if (!claimCode) return;
     setClaiming(true);
     setClaimError("");
 
@@ -86,10 +61,9 @@ export default function LoyaltyCard() {
     const result = await loyalty.claimToken(claimCode);
     setClaiming(false);
 
-    // The code is single-use either way — burn it locally now so a
-    // double-click or retry can't resend it.
+    // The code is single-use per session either way — burn it locally
+    // now so a double-click or retry can't resend the same attempt.
     setClaimCode(null);
-    setClaimExpiresAt(null);
 
     if (!result.success) {
       setClaimError(result.message);
@@ -114,7 +88,6 @@ export default function LoyaltyCard() {
   }
 
   const showUnlockedState = loyalty.isComplete && justUnlocked;
-  const hasUsableCode = claimCode && !isExpired;
 
   return (
     <section id="loyalty" className="px-5 sm:px-8 py-16">
@@ -126,7 +99,7 @@ export default function LoyaltyCard() {
         {authLoading ? (
           <div className="text-center text-ink/40 py-12">Loading…</div>
         ) : !session ? (
-          <SignInPanel hasPendingClaim={!!claimCode && !isExpired} />
+          <SignInPanel hasPendingClaim={!!claimCode} />
         ) : (
           <>
             <div className="flex items-center justify-between mb-4 px-1">
@@ -180,26 +153,22 @@ export default function LoyaltyCard() {
                       Collect {loyalty.tokensNeeded - loyalty.tokens} more to unlock 🎁 50% OFF
                     </p>
 
-                    {isExpired ? (
+                    {loyalty.alreadyClaimedToday ? (
                       <div className="text-center bg-amber-soft/40 border border-amber-200 rounded-2xl py-4 px-4">
                         <p className="font-display font-semibold text-ink text-sm mb-1">
-                          ⏱️ This QR code has expired
+                          ✅ Already claimed today
                         </p>
                         <p className="text-ink/50 text-xs">
-                          Ask staff to show a fresh QR code and scan again.
+                          Come back tomorrow and scan the QR code again.
                         </p>
                       </div>
-                    ) : hasUsableCode ? (
+                    ) : claimCode ? (
                       <button
                         onClick={handleClaim}
-                        disabled={!loyalty.canClaim || claiming}
+                        disabled={claiming}
                         className="w-full bg-ink text-white font-semibold py-3.5 rounded-full transition-all hover:bg-ink-soft active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-ink"
                       >
-                        {claiming
-                          ? "Claiming…"
-                          : loyalty.canClaim
-                          ? "Claim Today's Token"
-                          : `Come back in ~${loyalty.hoursUntilNextClaim}h`}
+                        {claiming ? "Claiming…" : "Claim Today's Token"}
                       </button>
                     ) : (
                       <div className="text-center bg-bg border border-hairline rounded-2xl py-4 px-4">
